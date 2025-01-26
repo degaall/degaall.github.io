@@ -1,50 +1,89 @@
-# Telegram Web Apps for Bots Example
-
-Example HTML-file that contains a plain-JS interaction with Telegram Web Apps API. 
-Live demo: [Attach Bot](https://t.me/asmico_attach_bot).
-
-## Links
-* Official docs: https://core.telegram.org/bots/webapps
-* Live Demo Bot: [Attach Bot](https://t.me/asmico_attach_bot)
-* Telegram Promo Bot: [Durger King](https://t.me/durgerkingbot)
-
-## Quick setup
-
-#### 0. Host the Web App in GitHub Pages
-
-The Web App must be hosted somewhere. Hosting it on a GitHub repository is a quick, free way to do it:
-
-1. Create a repository (or fork this one)
-2. On the repository: Settings > Pages:
-    - Source: Deploy from a branch
-    - Branch: master, / (root), Save
-3. Wait a few minutes for the web to be deployed. It will be available at: `https://{github-username}.github.io/{repository-name}/{location-inside-repository}`. In this case: `https://revenkroz.github.io/telegram-web-app-bot-example/index.html`
-
-#### 1. Show the user a button to open a Web App. There are two ways:
-
-1. Show the user a special menu button (near the message input field):
-    1. Go to [Bot Father](https://t.me/BotFather)
-    2. Select your bot
-    3. `Bot Settings` — `Menu Button` — `Specify..`/`Edit menu button URL`
-    4. Send a URL to your Web App (in this case, `https://revenkroz.github.io/telegram-web-app-bot-example/index.html`)
-
-2. The second way is to send a button with the data that contains field `web_app` with a URL to a Web App:
-    ```json
-    {
-        "text": "Test web_app",
-        "web_app": {
-            "url": "https://revenkroz.github.io/telegram-web-app-bot-example/index.html"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mood Checker</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f2f5;
+            margin: 0;
         }
-    }
-    ```
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .mood-btn {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .mood-btn:hover {
+            transform: scale(0.98);
+        }
+        #result {
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Как твое настроение? 😊</h1>
+        <button class="mood-btn" style="background: #4CAF50;" onclick="setMood('Отличное! 😄', 3)">⭐️⭐️⭐️ Отличное</button>
+        <button class="mood-btn" style="background: #FFC107;" onclick="setMood('Нормальное 🙂', 2)">⭐️⭐️ Нормальное</button>
+        <button class="mood-btn" style="background: #F44336;" onclick="setMood('Плохое 😞', 1)">⭐️ Плохое</button>
+        <div id="result"></div>
+    </div>
 
-#### 2. Add script to your Web App
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.MainButton.setText("Отправить результат").hide();
 
-To connect a Web App to the Telegram client, place the script `telegram-web-app.js` in the `<head>` tag before any other scripts, using this code ([more info](https://core.telegram.org/bots/webapps#initializing-web-apps)):
-```html
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-```
+        let currentMood = null;
 
-Once the script is connected, a `window.Telegram.WebApp` object will become available.
+        function setMood(text, score) {
+            currentMood = {text, score};
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+            result.innerHTML = `
+                <h2>Вы выбрали: ${text}</h2>
+                <p>Спасибо за ответ! 🎉</p>
+                <small>ID вашего пользователя: ${tg.initDataUnsafe.user?.id || 'не доступен'}</small>
+            `;
+            tg.MainButton.show();
+        }
 
-#### 3. Do the thing.
+        // Обработчик основной кнопки
+        Telegram.WebApp.onEvent('mainButtonClicked', function(){
+            if(currentMood) {
+                tg.sendData(JSON.stringify({
+                    mood: currentMood.score,
+                    user: tg.initDataUnsafe.user
+                }));
+                tg.close();
+            }
+        });
+
+        // Отображение кнопки закрытия
+        if (tg.platform !== 'unknown') {
+            tg.BackButton.show();
+            tg.onEvent('backButtonClicked', () => tg.close());
+        }
+    </script>
+</body>
+</html>
