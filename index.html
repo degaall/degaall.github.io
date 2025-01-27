@@ -1,134 +1,258 @@
-<!-- Добавьте это в раздел стилей -->
-<style>
-    .category-selector {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-        margin: 20px 0;
-    }
-    
-    .category-card {
-        padding: 15px;
-        border-radius: 10px;
-        background: white;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-    
-    .category-card:hover {
-        transform: scale(1.02);
-    }
-    
-    .powerups {
-        display: flex;
-        gap: 10px;
-        margin: 15px 0;
-    }
-    
-    .powerup-btn {
-        padding: 8px 15px;
-        background: #2196F3;
-        color: white;
-        border-radius: 20px;
-        cursor: pointer;
-    }
-</style>
-
-<!-- Обновите тело приложения -->
-<div class="container">
-    <div id="lobby">
-        <h2>Выберите категорию:</h2>
-        <div class="category-selector" id="categories"></div>
-        
-        <h2>Создать комнату:</h2>
-        <button onclick="createRoom()">🎮 Новая игра</button>
-        
-        <h2>Присоединиться:</h2>
-        <input type="text" id="roomId" placeholder="ID комнаты">
-        <button onclick="joinRoom()">🚪 Войти</button>
-    </div>
-    
-    <div id="game" style="display: none;">
-        <!-- Предыдущий интерфейс игры -->
-    </div>
-</div>
-
-<script>
-    // Новые константы
-    const CATEGORIES = {
-        9: 'Общие знания',
-        17: 'Наука',
-        22: 'География',
-        23: 'История'
-    };
-
-    // Обновленная функция инициализации
-    function initApp() {
-        // Показываем выбор категории
-        document.getElementById('categories').innerHTML = Object.entries(CATEGORIES)
-            .map(([id, name]) => `
-                <div class="category-card" onclick="selectCategory(${id})">
-                    ${name}
-                </div>
-            `).join('');
-    }
-
-    // Выбор категории
-    let selectedCategory = 9;
-    function selectCategory(categoryId) {
-        selectedCategory = categoryId;
-        document.querySelectorAll('.category-card').forEach(card => {
-            card.style.background = categoryId === Number(card.dataset.category) 
-                ? '#e3f2fd' : 'white';
-        });
-    }
-
-    // Создание комнаты
-    async function createRoom() {
-        const roomId = Math.random().toString(36).substr(2, 6).toUpperCase();
-        await firebase.database().ref(`rooms/${roomId}`).set({
-            category: selectedCategory,
-            players: {},
-            status: 'waiting'
-        });
-        tg.showAlert(`Комната создана! ID: ${roomId}`);
-        joinRoom(roomId);
-    }
-
-    // Присоединение к комнате
-    async function joinRoom(roomId = document.getElementById('roomId').value) {
-        const roomRef = firebase.database().ref(`rooms/${roomId}`);
-        const snapshot = await roomRef.once('value');
-        
-        if(snapshot.exists()) {
-            document.getElementById('lobby').style.display = 'none';
-            document.getElementById('game').style.display = 'block';
-            loadQuestions(snapshot.val().category);
-        } else {
-            tg.showAlert('Комната не найдена!');
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <title>Telegram Quiz</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
         }
-    }
 
-    // Система power-ups
-    let powerups = {
-        extraTime: 2,
-        doublePoints: 1
-    };
+        [data-theme="dark"] {
+            --background: #0f172a;
+            --surface: #1e293b;
+            --text: #f8fafc;
+            --border: #334155;
+        }
 
-    function usePowerup(type) {
-        if(powerups[type] > 0) {
-            powerups[type]--;
-            switch(type) {
-                case 'extraTime':
-                    // Логика добавления времени
-                    break;
-                case 'doublePoints':
-                    // Логика удвоения очков
-                    break;
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .category-card {
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            background: var(--surface);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .category-card.active {
+            border-color: var(--primary);
+            background: linear-gradient(45deg, var(--primary), #818cf8);
+            color: white;
+        }
+
+        .button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .input-group {
+            margin: 1.5rem 0;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .players-list {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1rem 0;
+        }
+
+        .player-card {
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        @keyframes pulse {
+            50% { opacity: 0.5; }
+        }
+
+        .loading {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--surface);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="glass-card">
+            <h1 style="margin: 0 0 1rem 0;">🎮 Викторина в Telegram</h1>
+            
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    class="input-field" 
+                    placeholder="Введите ID комнаты"
+                    id="roomId"
+                >
+            </div>
+
+            <div class="category-grid" id="categories"></div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="button" onclick="createRoom()">
+                    <span>🎮 Создать новую</span>
+                </button>
+                <button class="button" onclick="joinRoom()" 
+                    style="background: #4f46e5;">
+                    <span>🚪 Присоединиться</span>
+                </button>
+            </div>
+
+            <div class="players-list" id="players">
+                <div class="player-card loading" style="width: 120px; height: 40px;"></div>
+                <div class="player-card loading" style="width: 90px; height: 40px;"></div>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 45%"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        const categories = {
+            9: '🌍 Общие знания',
+            17: '🔬 Наука',
+            22: '🗺 География',
+            23: '🏛 История'
+        };
+
+        // Инициализация темы
+        function initTheme() {
+            if(tg.colorScheme === 'dark') {
+                document.body.setAttribute('data-theme', 'dark');
             }
         }
-    }
 
-    // Инициализируем при запуске
-    initApp();
-</script>
+        // Генерация категорий
+        function renderCategories() {
+            const container = document.getElementById('categories');
+            container.innerHTML = Object.entries(categories)
+                .map(([id, name]) => `
+                    <div class="category-card" data-id="${id}" onclick="selectCategory(${id})">
+                        ${name}
+                    </div>
+                `).join('');
+        }
+
+        // Выбор категории
+        let selectedCategory = 9;
+        function selectCategory(id) {
+            selectedCategory = id;
+            document.querySelectorAll('.category-card').forEach(card => {
+                card.classList.toggle('active', card.dataset.id == id);
+            });
+        }
+
+        // Анимация загрузки
+        function toggleLoading(show = true) {
+            document.querySelectorAll('.loading').forEach(el => {
+                el.style.display = show ? 'block' : 'none';
+            });
+        }
+
+        // Инициализация
+        function init() {
+            initTheme();
+            renderCategories();
+            selectCategory(9);
+        }
+
+        init();
+    </script>
+</body>
+</html>
