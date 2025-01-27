@@ -5,18 +5,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
+        /* Стили */
         body {
             font-family: Arial, sans-serif;
             background: #2e7d32;
             margin: 0;
             padding: 10px;
             color: white;
+            user-select: none;
         }
 
         .game-container {
             max-width: 600px;
             margin: 0 auto;
+            position: relative;
         }
 
         .card {
@@ -25,29 +30,20 @@
             background: white;
             border-radius: 5px;
             border: 2px solid #fff;
-            display: inline-block;
+            display: inline-flex;
             margin: 5px;
             cursor: pointer;
             transition: all 0.3s;
             position: relative;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-        }
-
-        .card.selected {
-            border-color: #ffeb3b;
-            transform: translateY(-10px);
+            justify-content: center;
+            align-items: center;
         }
 
         .card-value {
-            position: absolute;
             font-size: 18px;
             font-weight: bold;
-            width: 100%;
-            text-align: center;
+            position: absolute;
         }
 
         .top { top: 5px; }
@@ -62,199 +58,250 @@
             font-size: 18px;
         }
 
-        button {
-            background: #fbc02d;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
+        .trump-card {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            transform: rotate(90deg);
+        }
+
+        /* Анимации */
+        @keyframes deal {
+            0% { transform: scale(0) rotate(180deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        @keyframes pulse {
+            50% { transform: translateY(-10px); }
+        }
+
+        .deal-animation {
+            animation: deal 0.5s ease-out;
+        }
+
+        .pulse-animation {
+            animation: pulse 0.5s ease infinite;
         }
     </style>
 </head>
 <body>
     <div class="game-container">
-        <div class="game-status" id="status">Игра началась!</div>
-        
+        <div class="trump-card" id="trumpCard"></div>
+        <div class="game-status" id="status">Загрузка игры...</div>
         <div id="table" style="height: 120px; border: 2px dashed #fff; margin: 10px 0;"></div>
-        
-        <div id="opponent-hand" style="min-height: 100px;"></div>
-        
+        <div id="opponentHand"></div>
         <div style="text-align: center; margin: 20px 0;">
-            <button onclick="makeMove()" id="moveBtn">Ходить</button>
-            <button onclick="defend()" id="defendBtn" style="display: none;">Бить</button>
+            <button id="moveBtn" style="display: none;">Ходить</button>
+            <button id="takeBtn" style="display: none;">Взять</button>
         </div>
-
-        <div id="player-hand"></div>
+        <div id="playerHand"></div>
     </div>
 
     <script>
+        // Инициализация Firebase (ЗАМЕНИТЕ НА СВОИ ДАННЫЕ)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            authDomain: "your-project.firebaseapp.com",
+            databaseURL: "https://your-project.firebaseio.com",
+            projectId: "your-project",
+            storageBucket: "your-project.appspot.com"
+        };
+        firebase.initializeApp(firebaseConfig);
+
+        // Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.MainButton.setText("Закончить игру").hide();
+        tg.MainButton.hide();
 
+        // Игровые константы
         const SUITS = ['♠', '♣', '♥', '♦'];
         const VALUES = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-        
-        class Card {
-            constructor(suit, value) {
-                this.suit = suit;
-                this.value = value;
-                this.color = (suit === '♥' || suit === '♦') ? 'red' : 'black';
-                this.rank = VALUES.indexOf(value);
-            }
-        }
 
         class Game {
-            constructor() {
-                this.deck = [];
-                this.trump = null;
-                this.playerHand = [];
-                this.opponentHand = [];
-                this.table = [];
-                this.isPlayerTurn = true;
+            constructor(roomId) {
+                this.roomId = roomId;
+                this.ref = firebase.database().ref(`rooms/${roomId}`);
+                this.state = {
+                    players: {},
+                    table: [],
+                    deck: [],
+                    trump: null,
+                    status: 'waiting',
+                    currentPlayer: null
+                };
                 
-                this.createDeck();
+                this.init();
+            }
+
+            async init() {
+                if(this.roomId) {
+                    this.ref.on('value', snapshot => this.updateState(snapshot.val()));
+                } else {
+                    this.setupNewGame();
+                }
+            }
+
+            setupNewGame() {
+                // Инициализация новой игры
+                this.state.deck = this.createDeck();
                 this.shuffleDeck();
-                this.dealCards();
-                this.updateDisplay();
+                this.state.trump = this.state.deck[0].suit;
+                this.state.players[tg.initDataUnsafe.user.id] = {
+                    cards: this.state.deck.splice(0, 6),
+                    status: 'waiting'
+                };
             }
 
             createDeck() {
-                for(let suit of SUITS) {
-                    for(let value of VALUES) {
-                        this.deck.push(new Card(suit, value));
-                    }
-                }
+                return SUITS.flatMap(suit => 
+                    VALUES.map(value => ({
+                        suit,
+                        value,
+                        color: ['♥', '♦'].includes(suit) ? 'red' : 'black',
+                        rank: VALUES.indexOf(value)
+                    }))
+                );
             }
 
             shuffleDeck() {
-                for(let i = this.deck.length - 1; i > 0; i--) {
+                for(let i = this.state.deck.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
-                    [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+                    [this.state.deck[i], this.state.deck[j]] = [this.state.deck[j], this.state.deck[i]];
                 }
-                this.trump = this.deck[0].suit;
             }
 
-            dealCards() {
-                this.playerHand = this.deck.splice(0, 6);
-                this.opponentHand = this.deck.splice(0, 6);
-            }
-
-            computerMove() {
-                if(this.table.length === 0) {
-                    const card = this.opponentHand[Math.floor(Math.random() * this.opponentHand.length)];
-                    this.table.push(card);
-                    this.opponentHand = this.opponentHand.filter(c => c !== card);
-                    this.isPlayerTurn = false;
+            updateState(newState) {
+                if(newState) {
+                    this.state = newState;
+                    this.render();
                 }
-                this.updateDisplay();
             }
 
-            checkWinCondition() {
-                if(this.playerHand.length === 0 && this.opponentHand.length === 0) {
-                    return 'Ничья!';
-                }
-                if(this.playerHand.length === 0) return 'Вы победили!';
-                if(this.opponentHand.length === 0) return 'Компьютер победил!';
-                return null;
+            render() {
+                // Отрисовка интерфейса
+                this.renderTrumpCard();
+                this.renderHands();
+                this.updateStatus();
             }
-        }
 
-        let game = new Game();
-        let selectedCard = null;
+            renderTrumpCard() {
+                const trumpCard = this.state.deck[0];
+                document.getElementById('trumpCard').innerHTML = `
+                    <div class="card ${trumpCard.color}">
+                        <div class="card-value top">${trumpCard.value}${trumpCard.suit}</div>
+                        <div class="card-value bottom">${trumpCard.value}${trumpCard.suit}</div>
+                    </div>
+                `;
+            }
 
-        function createCardElement(card, isClickable = true) {
-            const div = document.createElement('div');
-            div.className = `card ${card.color}`;
-            div.innerHTML = `
-                <div class="card-value top">${card.value}${card.suit}</div>
-                <div class="card-value bottom">${card.value}${card.suit}</div>
-            `;
-            
-            if(isClickable) {
-                div.onclick = () => {
-                    if(!game.isPlayerTurn) return;
-                    selectedCard = card;
+            renderHands() {
+                // Отрисовка карт игрока
+                const playerHandDiv = document.getElementById('playerHand');
+                playerHandDiv.innerHTML = '';
+                this.getCurrentPlayer().cards.forEach(card => {
+                    const cardEl = this.createCardElement(card);
+                    cardEl.onclick = () => this.selectCard(card);
+                    playerHandDiv.appendChild(cardEl);
+                });
+            }
+
+            createCardElement(card) {
+                const div = document.createElement('div');
+                div.className = `card ${card.color} deal-animation`;
+                div.innerHTML = `
+                    <div class="card-value top">${card.value}${card.suit}</div>
+                    <div class="card-value bottom">${card.value}${card.suit}</div>
+                `;
+                return div;
+            }
+
+            selectCard(card) {
+                // Логика выбора карты
+                if(this.isCurrentPlayerTurn()) {
                     document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
-                    div.classList.add('selected');
-                };
+                    event.target.classList.add('selected');
+                    document.getElementById('moveBtn').style.display = 'inline-block';
+                }
             }
-            return div;
-        }
 
-        function updateGameStatus(text) {
-            document.getElementById('status').textContent = text;
-        }
-
-        function makeMove() {
-            if(!selectedCard) return;
-            
-            game.table.push(selectedCard);
-            game.playerHand = game.playerHand.filter(c => c !== selectedCard);
-            selectedCard = null;
-            
-            game.isPlayerTurn = false;
-            document.getElementById('defendBtn').style.display = 'block';
-            document.getElementById('moveBtn').style.display = 'none';
-            
-            setTimeout(() => game.computerMove(), 1000);
-            game.updateDisplay();
-        }
-
-        function defend() {
-            // Базовая логика защиты
-            game.table = [];
-            game.isPlayerTurn = true;
-            
-            // Добираем карты
-            game.playerHand.push(...game.deck.splice(0, 6 - game.playerHand.length));
-            game.opponentHand.push(...game.deck.splice(0, 6 - game.opponentHand.length));
-            
-            document.getElementById('defendBtn').style.display = 'none';
-            document.getElementById('moveBtn').style.display = 'block';
-            game.updateDisplay();
-        }
-
-        Game.prototype.updateDisplay = function() {
-            const playerHandDiv = document.getElementById('player-hand');
-            const opponentHandDiv = document.getElementById('opponent-hand');
-            const tableDiv = document.getElementById('table');
-            
-            playerHandDiv.innerHTML = '';
-            this.playerHand.forEach(card => 
-                playerHandDiv.appendChild(createCardElement(card))
-            );
-
-            opponentHandDiv.innerHTML = '';
-            this.opponentHand.forEach(card => 
-                opponentHandDiv.appendChild(createCardElement(card, false))
-            );
-
-            tableDiv.innerHTML = '';
-            this.table.forEach(card => 
-                tableDiv.appendChild(createCardElement(card, false))
-            );
-
-            const winStatus = this.checkWinCondition();
-            if(winStatus) {
-                updateGameStatus(winStatus);
-                tg.MainButton.show();
+            async makeMove() {
+                // Ход игрока
+                const selectedCard = document.querySelector('.selected');
+                if(selectedCard) {
+                    this.state.table.push(this.getSelectedCard());
+                    await this.ref.update({
+                        table: this.state.table,
+                        currentPlayer: this.getOpponentId()
+                    });
+                    this.updateRatings();
+                }
             }
-        };
 
-        // Обработчики Telegram
-        Telegram.WebApp.onEvent('mainButtonClicked', () => {
-            tg.sendData(JSON.stringify({
-                result: document.getElementById('status').textContent
-            }));
-            tg.close();
-        });
+            getSelectedCard() {
+                // Получение выбранной карты
+                const selected = document.querySelector('.selected');
+                return this.getCurrentPlayer().cards.find(c => 
+                    c.value + c.suit === selected.innerText.replace(/\n/g, '')
+                );
+            }
 
-        // Инициализация темы
-        if(window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.body.style.background = '#1b5e20';
+            updateStatus() {
+                let status = '';
+                if(this.state.status === 'waiting') {
+                    status = 'Ожидание игроков...';
+                } else if(this.isCurrentPlayerTurn()) {
+                    status = 'Ваш ход!';
+                } else {
+                    status = 'Ход противника';
+                }
+                document.getElementById('status').textContent = status;
+            }
+
+            isCurrentPlayerTurn() {
+                return this.state.currentPlayer === tg.initDataUnsafe.user.id;
+            }
+
+            getCurrentPlayer() {
+                return this.state.players[tg.initDataUnsafe.user.id];
+            }
+
+            getOpponentId() {
+                return Object.keys(this.state.players).find(id => id !== tg.initDataUnsafe.user.id);
+            }
+
+            async updateRatings() {
+                if(this.state.status === 'finished') {
+                    await firebase.database().ref(`users/${tg.initDataUnsafe.user.id}/rating`)
+                        .transaction(r => (r || 0) + 10);
+                }
+            }
+        }
+
+        // Инициализация игры
+        const urlParams = new URLSearchParams(window.location.search);
+        const startParam = urlParams.get('startapp');
+        const roomId = startParam ? startParam.split('_')[1] : null;
+        
+        let game;
+        if(roomId) {
+            game = new Game(roomId);
+        } else {
+            game = new Game(`room_${Date.now()}`);
+            tg.showAlert(`Комната создана: ${game.roomId}`);
+        }
+
+        // Обработчики кнопок
+        document.getElementById('moveBtn').onclick = () => game.makeMove();
+        document.getElementById('takeBtn').onclick = () => game.takeCards();
+
+        // Интеграция с Telegram
+        tg.MainButton.setText("Обновить игру").show();
+        Telegram.WebApp.onEvent('mainButtonClicked', () => game.render());
+
+        // Адаптация под тему Telegram
+        if(tg.colorScheme === 'dark') {
+            document.body.style.backgroundColor = '#1b5e20';
         }
     </script>
 </body>
-</html> 
+</html>
