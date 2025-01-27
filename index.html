@@ -1,258 +1,168 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <title>Telegram Quiz</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        :root {
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
-            --background: #f8fafc;
-            --surface: #ffffff;
-            --text: #1e293b;
-            --border: #e2e8f0;
-        }
+<!-- Добавить в раздел стилей -->
+<style>
+    .chat-container {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        width: 300px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 1rem 1rem 0 0;
+        margin: 1rem;
+        box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+        max-height: 400px;
+        display: flex;
+        flex-direction: column;
+    }
 
-        [data-theme="dark"] {
-            --background: #0f172a;
-            --surface: #1e293b;
-            --text: #f8fafc;
-            --border: #334155;
-        }
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+    }
 
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: var(--background);
-            color: var(--text);
-            margin: 0;
-            padding: 1rem;
-            transition: all 0.3s ease;
-        }
+    .message {
+        margin-bottom: 0.75rem;
+        display: flex;
+        gap: 0.5rem;
+        align-items: start;
+    }
 
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
+    .message-avatar {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: white;
+    }
 
-        .glass-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 1rem;
-            padding: 1.5rem;
-            margin: 1rem 0;
-            border: 1px solid var(--border);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
+    .message-content {
+        background: var(--background);
+        padding: 0.75rem;
+        border-radius: 0 1rem 1rem 1rem;
+        max-width: 80%;
+    }
 
-        .category-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 1rem;
-            margin: 1.5rem 0;
-        }
+    .message-input {
+        display: flex;
+        gap: 0.5rem;
+        padding: 1rem;
+        border-top: 1px solid var(--border);
+    }
 
-        .category-card {
-            padding: 1.5rem;
-            border-radius: 0.75rem;
-            background: var(--surface);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border: 1px solid var(--border);
-            text-align: center;
-        }
+    .chat-input {
+        flex: 1;
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+        background: var(--background);
+        color: var(--text);
+    }
+</style>
 
-        .category-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .category-card.active {
-            border-color: var(--primary);
-            background: linear-gradient(45deg, var(--primary), #818cf8);
-            color: white;
-        }
-
-        .button {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .button:hover {
-            background: var(--primary-hover);
-            transform: translateY(-1px);
-        }
-
-        .input-group {
-            margin: 1.5rem 0;
-        }
-
-        .input-field {
-            width: 100%;
-            padding: 0.75rem;
-            border-radius: 0.75rem;
-            border: 1px solid var(--border);
-            background: var(--surface);
-            color: var(--text);
-            font-size: 1rem;
-            transition: all 0.2s ease;
-        }
-
-        .input-field:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        }
-
-        .players-list {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin: 1rem 0;
-        }
-
-        .player-card {
-            padding: 0.5rem 1rem;
-            border-radius: 2rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-        }
-
-        @keyframes pulse {
-            50% { opacity: 0.5; }
-        }
-
-        .loading {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        .progress-bar {
-            height: 8px;
-            background: var(--surface);
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 1rem 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: var(--primary);
-            transition: width 0.3s ease;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="glass-card">
-            <h1 style="margin: 0 0 1rem 0;">🎮 Викторина в Telegram</h1>
-            
-            <div class="input-group">
-                <input 
-                    type="text" 
-                    class="input-field" 
-                    placeholder="Введите ID комнаты"
-                    id="roomId"
-                >
-            </div>
-
-            <div class="category-grid" id="categories"></div>
-
-            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                <button class="button" onclick="createRoom()">
-                    <span>🎮 Создать новую</span>
-                </button>
-                <button class="button" onclick="joinRoom()" 
-                    style="background: #4f46e5;">
-                    <span>🚪 Присоединиться</span>
-                </button>
-            </div>
-
-            <div class="players-list" id="players">
-                <div class="player-card loading" style="width: 120px; height: 40px;"></div>
-                <div class="player-card loading" style="width: 90px; height: 40px;"></div>
-            </div>
-
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: 45%"></div>
-            </div>
-        </div>
+<!-- Добавить в тело приложения -->
+<div class="chat-container">
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="message-input">
+        <input 
+            type="text" 
+            class="chat-input" 
+            placeholder="Написать сообщение..."
+            id="chatInput"
+            onkeypress="handleChatInputKey(event)"
+        >
+        <button class="button" onclick="sendMessage()" style="padding: 0.5rem;">
+            <span>📨</span>
+        </button>
     </div>
+</div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        const categories = {
-            9: '🌍 Общие знания',
-            17: '🔬 Наука',
-            22: '🗺 География',
-            23: '🏛 История'
-        };
+<script>
+    // Инициализация чата
+    let chatRef;
+    function initChat(roomId) {
+        chatRef = firebase.database().ref(`chat/${roomId}`);
+        
+        // Слушатель новых сообщений
+        chatRef.limitToLast(50).on('child_added', snapshot => {
+            const message = snapshot.val();
+            addMessageToChat(message);
+        });
+    }
 
-        // Инициализация темы
-        function initTheme() {
-            if(tg.colorScheme === 'dark') {
-                document.body.setAttribute('data-theme', 'dark');
-            }
-        }
+    // Добавление сообщения в чат
+    function addMessageToChat(message) {
+        const messagesDiv = document.getElementById('chatMessages');
+        const isCurrentUser = message.userId === tg.initDataUnsafe.user.id;
 
-        // Генерация категорий
-        function renderCategories() {
-            const container = document.getElementById('categories');
-            container.innerHTML = Object.entries(categories)
-                .map(([id, name]) => `
-                    <div class="category-card" data-id="${id}" onclick="selectCategory(${id})">
-                        ${name}
+        const messageHtml = `
+            <div class="message" style="${isCurrentUser ? 'flex-direction: row-reverse;' : ''}">
+                ${!isCurrentUser ? `
+                    <div class="message-avatar">
+                        ${message.userName[0].toUpperCase()}
                     </div>
-                `).join('');
-        }
+                ` : ''}
+                
+                <div class="message-content" style="${isCurrentUser ? 
+                    'background: var(--primary); color: white; border-radius: 1rem 0 1rem 1rem;' : ''}">
+                    <div style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 0.25rem;">
+                        ${isCurrentUser ? 'Вы' : message.userName}
+                    </div>
+                    <div>${message.text}</div>
+                    <div style="font-size: 0.7rem; opacity: 0.5; text-align: right;">
+                        ${new Date(message.timestamp).toLocaleTimeString()}
+                    </div>
+                </div>
+            </div>
+        `;
 
-        // Выбор категории
-        let selectedCategory = 9;
-        function selectCategory(id) {
-            selectedCategory = id;
-            document.querySelectorAll('.category-card').forEach(card => {
-                card.classList.toggle('active', card.dataset.id == id);
-            });
-        }
+        messagesDiv.innerHTML += messageHtml;
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
 
-        // Анимация загрузки
-        function toggleLoading(show = true) {
-            document.querySelectorAll('.loading').forEach(el => {
-                el.style.display = show ? 'block' : 'none';
-            });
-        }
+    // Отправка сообщения
+    function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        
+        if(text) {
+            const message = {
+                text,
+                userId: tg.initDataUnsafe.user.id,
+                userName: tg.initDataUnsafe.user.first_name,
+                timestamp: Date.now()
+            };
 
-        // Инициализация
-        function init() {
-            initTheme();
-            renderCategories();
-            selectCategory(9);
+            chatRef.push(message);
+            input.value = '';
         }
+    }
 
-        init();
-    </script>
-</body>
-</html>
+    // Обработка нажатия Enter
+    function handleChatInputKey(e) {
+        if(e.key === 'Enter') {
+            sendMessage();
+        }
+    }
+
+    // Обновить функцию joinRoom
+    async function joinRoom(roomId = document.getElementById('roomId').value) {
+        const roomRef = firebase.database().ref(`rooms/${roomId}`);
+        const snapshot = await roomRef.once('value');
+        
+        if(snapshot.exists()) {
+            initChat(roomId); // Инициализируем чат
+            // ... остальная логика
+        }
+    }
+
+    // Удалить слушатель при выходе
+    window.addEventListener('beforeunload', () => {
+        if(chatRef) chatRef.off();
+    });
+</script>
