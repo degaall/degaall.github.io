@@ -1,245 +1,260 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <title>Super Mood App</title>
+    <title>Telegram Дурак</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        :root {
-            --primary-bg: #f0f2f5;
-            --primary-text: #000;
-            --button-hover: rgba(0,0,0,0.1);
-        }
-
-        [data-theme="dark"] {
-            --primary-bg: #1a1a1a;
-            --primary-text: #fff;
-            --button-hover: rgba(255,255,255,0.1);
-        }
-
         body {
             font-family: Arial, sans-serif;
-            padding: 20px;
-            background: var(--primary-bg);
-            color: var(--primary-text);
+            background: #2e7d32;
             margin: 0;
-            transition: all 0.3s;
+            padding: 10px;
+            color: white;
         }
 
-        .container {
+        .game-container {
             max-width: 600px;
             margin: 0 auto;
         }
 
-        .mood-btn {
-            width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            border: none;
-            border-radius: 10px;
-            font-size: 18px;
+        .card {
+            width: 60px;
+            height: 90px;
+            background: white;
+            border-radius: 5px;
+            border: 2px solid #fff;
+            display: inline-block;
+            margin: 5px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s;
+            position: relative;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        .mood-btn:hover {
-            transform: scale(0.98);
-            filter: brightness(90%);
+        .card:hover {
+            transform: translateY(-5px);
         }
 
-        #result {
-            padding: 20px;
-            background: var(--button-hover);
-            border-radius: 10px;
-            margin-top: 20px;
+        .card.selected {
+            border-color: #ffeb3b;
+            transform: translateY(-10px);
+        }
+
+        .card-value {
+            position: absolute;
+            font-size: 18px;
+            font-weight: bold;
+            width: 100%;
             text-align: center;
-            display: none;
         }
 
-        .emoji-animation {
-            font-size: 2em;
-            margin: 15px 0;
-            animation: bounce 0.5s ease;
+        .top { top: 5px; }
+        .bottom { bottom: 5px; transform: rotate(180deg); }
+
+        .red { color: #d32f2f; }
+        .black { color: #212121; }
+
+        .game-status {
+            text-align: center;
+            padding: 10px;
+            font-size: 18px;
         }
 
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .lang-switcher {
-            position: fixed;
-            top: 10px;
-            right: 10px;
+        button {
+            background: #fbc02d;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="lang-switcher">
-            <button onclick="changeLanguage('ru')">🇷🇺</button>
-            <button onclick="changeLanguage('en')">🇬🇧</button>
-        </div>
+    <div class="game-container">
+        <div class="game-status" id="status">Игра началась!</div>
         
-        <h1 data-i18n="title">Как твое настроение? 😊</h1>
+        <div id="table" style="height: 120px; border: 2px dashed #fff; margin: 10px 0;"></div>
         
-        <!-- Кнопки настроения -->
-        <button class="mood-btn" style="background: #4CAF50;" 
-                onclick="setMood('Отличное! 😄', 3)" 
-                data-i18n="mood3">⭐️⭐️⭐️ Отличное</button>
-        <button class="mood-btn" style="background: #FFC107;" 
-                onclick="setMood('Нормальное 🙂', 2)" 
-                data-i18n="mood2">⭐️⭐️ Нормальное</button>
-        <button class="mood-btn" style="background: #F44336;" 
-                onclick="setMood('Плохое 😞', 1)" 
-                data-i18n="mood1">⭐️ Плохое</button>
-
-        <!-- Мини-игра -->
-        <div id="game" style="margin-top: 30px; display: none;">
-            <h3 data-i18n="gameTitle">Поймай смайлик!</h3>
-            <div id="gameArea" style="height: 100px; border: 2px dashed; position: relative;">
-                <div id="target" style="position: absolute; font-size: 24px;">🎯</div>
-            </div>
+        <div id="opponent-hand" style="min-height: 100px;"></div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <button onclick="makeMove()" id="moveBtn">Ходить</button>
+            <button onclick="defend()" id="defendBtn" style="display: none;">Бить</button>
         </div>
 
-        <div id="result"></div>
-        
-        <!-- Кнопка оплаты -->
-        <button id="donateBtn" class="mood-btn" style="background: #2196F3; display: none;" 
-                onclick="initPayment()" data-i18n="donate">Поддержать разработчика 💰</button>
+        <div id="player-hand"></div>
     </div>
 
     <script>
-        // Инициализация Telegram WebApp
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.MainButton.setText("Отправить результат").hide();
+        tg.MainButton.setText("Закончить игру").hide();
 
-        // Конфиг Firebase (замените на свой!)
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            databaseURL: "https://YOUR_PROJECT.firebaseio.com",
-            projectId: "YOUR_PROJECT",
-            storageBucket: "YOUR_PROJECT.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID"
-        };
-        firebase.initializeApp(firebaseConfig);
-
-        let currentMood = null;
-        const emojiMap = {1: '😭', 2: '😐', 3: '🤩'};
-        let currentLang = 'ru';
-
-        // Инициализация темы
-        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.body.setAttribute('data-theme', 'dark');
-        }
-
-        // Локализация
-        const translations = {
-            ru: {
-                title: "Как твое настроение? 😊",
-                mood3: "⭐️⭐️⭐️ Отличное",
-                mood2: "⭐️⭐️ Нормальное",
-                mood1: "⭐️ Плохое",
-                gameTitle: "Поймай смайлик!",
-                donate: "Поддержать разработчика 💰"
-            },
-            en: {
-                title: "How are you feeling? 😊",
-                mood3: "⭐️⭐️⭐️ Awesome",
-                mood2: "⭐️⭐️ Normal",
-                mood1: "⭐️ Bad",
-                gameTitle: "Catch the emoji!",
-                donate: "Support developer 💰"
+        const SUITS = ['♠', '♣', '♥', '♦'];
+        const VALUES = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        
+        class Card {
+            constructor(suit, value) {
+                this.suit = suit;
+                this.value = value;
+                this.color = (suit === '♥' || suit === '♦') ? 'red' : 'black';
+                this.rank = VALUES.indexOf(value);
             }
-        };
-
-        function changeLanguage(lang) {
-            currentLang = lang;
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const key = el.getAttribute('data-i18n');
-                el.textContent = translations[lang][key];
-            });
         }
 
-        function setMood(text, score) {
-            // Вибрация
-            if (navigator.vibrate) navigator.vibrate(50);
-            
-            currentMood = {text, score};
-            const result = document.getElementById('result');
-            
-            // Показать игру и кнопку доната
-            document.getElementById('game').style.display = 'block';
-            document.getElementById('donateBtn').style.display = 'block';
-            initGame();
+        class Game {
+            constructor() {
+                this.deck = [];
+                this.trump = null;
+                this.playerHand = [];
+                this.opponentHand = [];
+                this.table = [];
+                this.isPlayerTurn = true;
+                
+                this.createDeck();
+                this.shuffleDeck();
+                this.dealCards();
+                this.updateDisplay();
+            }
 
-            // Сохранение в Firebase
-            const userId = tg.initDataUnsafe.user?.id || 'anonymous';
-            firebase.database().ref('moods/' + userId).push({
-                mood: score,
-                timestamp: Date.now()
-            });
+            createDeck() {
+                for(let suit of SUITS) {
+                    for(let value of VALUES) {
+                        this.deck.push(new Card(suit, value));
+                    }
+                }
+            }
 
-            result.style.display = 'block';
-            result.innerHTML = `
-                <h2>${text}</h2>
-                <div class="emoji-animation">${emojiMap[score].repeat(score)}</div>
-                <small>User ID: ${userId}</small>
+            shuffleDeck() {
+                for(let i = this.deck.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+                }
+                this.trump = this.deck[0].suit;
+            }
+
+            dealCards() {
+                this.playerHand = this.deck.splice(0, 6);
+                this.opponentHand = this.deck.splice(0, 6);
+            }
+
+            computerMove() {
+                if(this.table.length === 0) {
+                    const card = this.opponentHand[Math.floor(Math.random() * this.opponentHand.length)];
+                    this.table.push(card);
+                    this.opponentHand = this.opponentHand.filter(c => c !== card);
+                    this.isPlayerTurn = false;
+                }
+                this.updateDisplay();
+            }
+
+            checkWinCondition() {
+                if(this.playerHand.length === 0 && this.opponentHand.length === 0) {
+                    return 'Ничья!';
+                }
+                if(this.playerHand.length === 0) return 'Вы победили!';
+                if(this.opponentHand.length === 0) return 'Компьютер победил!';
+                return null;
+            }
+        }
+
+        let game = new Game();
+        let selectedCard = null;
+
+        function createCardElement(card, isClickable = true) {
+            const div = document.createElement('div');
+            div.className = `card ${card.color}`;
+            div.innerHTML = `
+                <div class="card-value top">${card.value}${card.suit}</div>
+                <div class="card-value bottom">${card.value}${card.suit}</div>
             `;
             
-            tg.MainButton.show();
+            if(isClickable) {
+                div.onclick = () => {
+                    if(!game.isPlayerTurn) return;
+                    selectedCard = card;
+                    document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+                    div.classList.add('selected');
+                };
+            }
+            return div;
         }
 
-        // Мини-игра
-        function initGame() {
-            const target = document.getElementById('target');
-            let position = 0;
-            let direction = 1;
-
-            const move = () => {
-                position += direction * 5;
-                if (position > 150 || position < 0) direction *= -1;
-                target.style.left = position + 'px';
-                requestAnimationFrame(move);
-            };
-            move();
+        function updateGameStatus(text) {
+            document.getElementById('status').textContent = text;
         }
 
-        // Инициализация платежей
-        function initPayment() {
-            tg.showInvoice({
-                title: "Поддержка разработчика",
-                description: "Спасибо за вашу поддержку!",
-                currency: "USD",
-                prices: [{ label: "Донат", amount: "100" }]
-            });
+        function makeMove() {
+            if(!selectedCard) return;
+            
+            game.table.push(selectedCard);
+            game.playerHand = game.playerHand.filter(c => c !== selectedCard);
+            selectedCard = null;
+            
+            game.isPlayerTurn = false;
+            document.getElementById('defendBtn').style.display = 'block';
+            document.getElementById('moveBtn').style.display = 'none';
+            
+            setTimeout(() => game.computerMove(), 1000);
+            game.updateDisplay();
         }
+
+        function defend() {
+            // Базовая логика защиты
+            game.table = [];
+            game.isPlayerTurn = true;
+            
+            // Добираем карты
+            game.playerHand.push(...game.deck.splice(0, 6 - game.playerHand.length));
+            game.opponentHand.push(...game.deck.splice(0, 6 - game.opponentHand.length));
+            
+            document.getElementById('defendBtn').style.display = 'none';
+            document.getElementById('moveBtn').style.display = 'block';
+            game.updateDisplay();
+        }
+
+        Game.prototype.updateDisplay = function() {
+            const playerHandDiv = document.getElementById('player-hand');
+            const opponentHandDiv = document.getElementById('opponent-hand');
+            const tableDiv = document.getElementById('table');
+            
+            playerHandDiv.innerHTML = '';
+            this.playerHand.forEach(card => 
+                playerHandDiv.appendChild(createCardElement(card))
+            );
+
+            opponentHandDiv.innerHTML = '';
+            this.opponentHand.forEach(card => 
+                opponentHandDiv.appendChild(createCardElement(card, false))
+            );
+
+            tableDiv.innerHTML = '';
+            this.table.forEach(card => 
+                tableDiv.appendChild(createCardElement(card, false))
+            );
+
+            const winStatus = this.checkWinCondition();
+            if(winStatus) {
+                updateGameStatus(winStatus);
+                tg.MainButton.show();
+            }
+        };
 
         // Обработчики Telegram
         Telegram.WebApp.onEvent('mainButtonClicked', () => {
-            tg.sendData(JSON.stringify(currentMood));
+            tg.sendData(JSON.stringify({
+                result: document.getElementById('status').textContent
+            }));
             tg.close();
         });
 
-        Telegram.WebApp.onEvent('invoiceClosed', (event) => {
-            if (event.status === 'paid') {
-                alert('Спасибо за поддержку! 💖');
-            }
-        });
-
-        if (tg.platform !== 'unknown') {
-            tg.BackButton.show();
-            tg.onEvent('backButtonClicked', () => tg.close());
+        // Инициализация темы
+        if(window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.body.style.background = '#1b5e20';
         }
-
-        // Инициализация языка
-        changeLanguage('ru');
     </script>
 </body>
 </html>
