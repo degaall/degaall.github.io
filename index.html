@@ -1,168 +1,97 @@
-<!-- Добавить в раздел стилей -->
-<style>
-    .chat-container {
-        position: fixed;
-        bottom: 0;
-        right: 0;
-        width: 300px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 1rem 1rem 0 0;
-        margin: 1rem;
-        box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
-        max-height: 400px;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .chat-messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 1rem;
-    }
-
-    .message {
-        margin-bottom: 0.75rem;
-        display: flex;
-        gap: 0.5rem;
-        align-items: start;
-    }
-
-    .message-avatar {
-        flex-shrink: 0;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: var(--primary);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        color: white;
-    }
-
-    .message-content {
-        background: var(--background);
-        padding: 0.75rem;
-        border-radius: 0 1rem 1rem 1rem;
-        max-width: 80%;
-    }
-
-    .message-input {
-        display: flex;
-        gap: 0.5rem;
-        padding: 1rem;
-        border-top: 1px solid var(--border);
-    }
-
-    .chat-input {
-        flex: 1;
-        padding: 0.5rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--border);
-        background: var(--background);
-        color: var(--text);
-    }
-</style>
-
-<!-- Добавить в тело приложения -->
-<div class="chat-container">
-    <div class="chat-messages" id="chatMessages"></div>
-    <div class="message-input">
-        <input 
-            type="text" 
-            class="chat-input" 
-            placeholder="Написать сообщение..."
-            id="chatInput"
-            onkeypress="handleChatInputKey(event)"
-        >
-        <button class="button" onclick="sendMessage()" style="padding: 0.5rem;">
-            <span>📨</span>
-        </button>
-    </div>
-</div>
-
-<script>
-    // Инициализация чата
-    let chatRef;
-    function initChat(roomId) {
-        chatRef = firebase.database().ref(`chat/${roomId}`);
-        
-        // Слушатель новых сообщений
-        chatRef.limitToLast(50).on('child_added', snapshot => {
-            const message = snapshot.val();
-            addMessageToChat(message);
-        });
-    }
-
-    // Добавление сообщения в чат
-    function addMessageToChat(message) {
-        const messagesDiv = document.getElementById('chatMessages');
-        const isCurrentUser = message.userId === tg.initDataUnsafe.user.id;
-
-        const messageHtml = `
-            <div class="message" style="${isCurrentUser ? 'flex-direction: row-reverse;' : ''}">
-                ${!isCurrentUser ? `
-                    <div class="message-avatar">
-                        ${message.userName[0].toUpperCase()}
-                    </div>
-                ` : ''}
-                
-                <div class="message-content" style="${isCurrentUser ? 
-                    'background: var(--primary); color: white; border-radius: 1rem 0 1rem 1rem;' : ''}">
-                    <div style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 0.25rem;">
-                        ${isCurrentUser ? 'Вы' : message.userName}
-                    </div>
-                    <div>${message.text}</div>
-                    <div style="font-size: 0.7rem; opacity: 0.5; text-align: right;">
-                        ${new Date(message.timestamp).toLocaleTimeString()}
-                    </div>
-                </div>
-            </div>
-        `;
-
-        messagesDiv.innerHTML += messageHtml;
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    // Отправка сообщения
-    function sendMessage() {
-        const input = document.getElementById('chatInput');
-        const text = input.value.trim();
-        
-        if(text) {
-            const message = {
-                text,
-                userId: tg.initDataUnsafe.user.id,
-                userName: tg.initDataUnsafe.user.first_name,
-                timestamp: Date.now()
-            };
-
-            chatRef.push(message);
-            input.value = '';
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор мемов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
         }
-    }
-
-    // Обработка нажатия Enter
-    function handleChatInputKey(e) {
-        if(e.key === 'Enter') {
-            sendMessage();
+        #memeCanvas {
+            border: 1px solid black;
+            margin-top: 20px;
         }
-    }
-
-    // Обновить функцию joinRoom
-    async function joinRoom(roomId = document.getElementById('roomId').value) {
-        const roomRef = firebase.database().ref(`rooms/${roomId}`);
-        const snapshot = await roomRef.once('value');
-        
-        if(snapshot.exists()) {
-            initChat(roomId); // Инициализируем чат
-            // ... остальная логика
+        input[type="text"] {
+            width: 300px;
+            padding: 10px;
+            margin: 10px 0;
         }
-    }
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
 
-    // Удалить слушатель при выходе
-    window.addEventListener('beforeunload', () => {
-        if(chatRef) chatRef.off();
-    });
-</script>
+    <h1>Генератор мемов</h1>
+    
+    <input type="file" id="imageUpload" accept="image/*">
+    <br>
+    <input type="text" id="topText" placeholder="Верхний текст">
+    <br>
+    <input type="text" id="bottomText" placeholder="Нижний текст">
+    <br>
+    <button onclick="generateMeme()">Создать мем</button>
+
+    <canvas id="memeCanvas" class="hidden"></canvas>
+
+    <script>
+        function generateMeme() {
+            const imgInput = document.getElementById('imageUpload');
+            const topText = document.getElementById('topText').value.toUpperCase();
+            const bottomText = document.getElementById('bottomText').value.toUpperCase();
+            const canvas = document.getElementById('memeCanvas');
+            const ctx = canvas.getContext('2d');
+
+            if (imgInput.files && imgInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+
+                        ctx.font = '40px Impact';
+                        ctx.fillStyle = 'white';
+                        ctx.strokeStyle = 'black';
+                        ctx.lineWidth = 3;
+
+                        // Верхний текст
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'top';
+                        drawText(ctx, topText, canvas.width / 2, 10);
+
+                        // Нижний текст
+                        ctx.textBaseline = 'bottom';
+                        drawText(ctx, bottomText, canvas.width / 2, canvas.height - 10);
+
+                        canvas.classList.remove('hidden');
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(imgInput.files[0]);
+            } else {
+                alert('Пожалуйста, выберите изображение.');
+            }
+        }
+
+        function drawText(ctx, text, x, y) {
+            const lines = text.split('|');
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                ctx.fillText(line, x, y + i * 50);
+                ctx.strokeText(line, x, y + i * 50);
+            }
+        }
+    </script>
+
+</body>
+</html>
