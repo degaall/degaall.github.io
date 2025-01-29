@@ -8,135 +8,166 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js"></script>
     <style>
         :root {
-            --bg: #ffffff;
+            --bg: #f8fafc;
             --text: #1a1a1a;
             --primary: #3b82f6;
-            --surface: #f1f5f9;
+            --surface: #ffffff;
+            --shadow: rgba(0, 0, 0, 0.1);
         }
 
         [data-theme="dark"] {
             --bg: #0f172a;
             --text: #f8fafc;
             --surface: #1e293b;
+            --shadow: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
             font-family: Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
-            margin: 0;
             padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
         }
 
         .editor-container {
-            display: grid;
-            grid-template-columns: 200px 1fr 200px;
-            gap: 1rem;
-            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .meme-canvas {
+            background: var(--surface);
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px var(--shadow);
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        canvas {
+            border-radius: 10px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
         }
 
         .panel {
             background: var(--surface);
-            padding: 1rem;
+            padding: 12px;
             border-radius: 12px;
-            overflow-y: auto;
-        }
-
-        .meme-canvas {
-            border: 2px dashed var(--surface);
-            border-radius: 12px;
-        }
-
-        button {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            margin: 4px 0;
-            cursor: pointer;
+            box-shadow: 0 4px 10px var(--shadow);
+            margin-top: 12px;
             width: 100%;
+            max-width: 500px;
+            display: flex;
+            overflow-x: auto;
+            gap: 8px;
+            padding-bottom: 10px;
         }
 
-        .template-thumbnail {
+        .panel h3 {
             width: 100%;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .template-thumbnail,
+        .sticker-item {
             border-radius: 8px;
-            margin: 8px 0;
             cursor: pointer;
             transition: transform 0.2s;
         }
 
-        .template-thumbnail:hover {
+        .template-thumbnail {
+            width: 80px;
+        }
+
+        .template-thumbnail:hover,
+        .sticker-item:hover {
             transform: scale(1.05);
         }
 
         .sticker-item {
-            width: 80px;
-            height: 80px;
-            padding: 8px;
-            cursor: pointer;
-            transition: transform 0.2s;
+            font-size: 36px;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface);
+            box-shadow: 0 2px 5px var(--shadow);
         }
 
-        .sticker-item:hover {
-            transform: scale(1.1);
+        .save-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 4px 10px var(--shadow);
+        }
+
+        .save-button:hover {
+            background: #2563eb;
         }
     </style>
 </head>
 <body>
     <div class="editor-container">
-        <!-- Шаблоны -->
-        <div class="panel">
-            <h3>🎭 Популярные шаблоны</h3>
-            <div id="templates"></div>
-        </div>
-
-        <!-- Основной редактор -->
         <div class="meme-canvas">
             <canvas id="canvas"></canvas>
         </div>
 
-        <!-- Стикеры -->
+        <div class="panel">
+            <h3>🎭 Шаблоны</h3>
+            <div id="templates" style="display: flex; gap: 10px;"></div>
+        </div>
+
         <div class="panel">
             <h3>🌟 Стикеры</h3>
-            <div id="stickers"></div>
+            <div id="stickers" style="display: flex; gap: 10px;"></div>
         </div>
+
+        <button class="save-button" onclick="saveMeme()">💾 Сохранить</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         let canvas = new fabric.Canvas('canvas', {
-            width: 500,
-            height: 500,
+            width: 400,
+            height: 400,
             backgroundColor: '#fff'
         });
 
-        // Шаблоны мемов
         const templates = [
-            {
-                name: 'Драматург',
-                url: 'https://i.imgur.com/abc123.jpg', // Замените на реальный URL
-                textAreas: [
-                    { top: 50, left: 50, fontSize: 40 },
-                    { top: 400, left: 50, fontSize: 40 }
-                ]
-            },
-            {
-                name: 'Стивен Сигал',
-                url: 'https://i.imgur.com/def456.jpg', // Замените на реальный URL
-                textAreas: [
-                    { top: 20, left: 50, fontSize: 35 }
-                ]
-            }
+            { name: 'Драматург', url: 'https://i.imgur.com/abc123.jpg', textAreas: [{ top: 50, left: 50, fontSize: 30 }] },
+            { name: 'Стивен Сигал', url: 'https://i.imgur.com/def456.jpg', textAreas: [{ top: 20, left: 50, fontSize: 25 }] }
         ];
 
-        // Коллекция стикеров
-        const stickers = [
-            '😎', '🤣', '💥', '👑', 
-            '🔥', '💀', '❤️', '🎉'
-        ];
+        const stickers = ['😎', '🤣', '💥', '👑', '🔥', '💀', '❤️', '🎉'];
 
-        // Инициализация
         tg.expand();
         initTemplates();
         initStickers();
@@ -157,13 +188,7 @@
             stickers.forEach(sticker => {
                 const div = document.createElement('div');
                 div.className = 'sticker-item';
-                div.innerHTML = `
-                    <div style="
-                        font-size: 48px;
-                        text-align: center;
-                        user-select: none;
-                    ">${sticker}</div>
-                `;
+                div.innerHTML = sticker;
                 div.onclick = () => addSticker(sticker);
                 container.appendChild(div);
             });
@@ -176,7 +201,7 @@
                     template.textAreas.forEach(area => {
                         const text = new fabric.Textbox('Ваш текст', {
                             ...area,
-                            width: 400,
+                            width: 300,
                             fill: '#ffffff',
                             fontFamily: 'Impact',
                             stroke: '#000000',
@@ -196,37 +221,23 @@
             const text = new fabric.Text(sticker, {
                 left: 100,
                 top: 100,
-                fontSize: 60,
+                fontSize: 50,
                 fill: '#ffd700',
                 fontFamily: 'Arial',
-                shadow: 'black 2px 2px 4px',
-                padding: 10
+                shadow: 'black 2px 2px 4px'
             });
-            
             canvas.add(text);
-            canvas.setActiveObject(text);
         }
 
-        // Сохранение мема
         function saveMeme() {
-            const dataURL = canvas.toDataURL({
-                format: 'png',
-                quality: 0.9
-            });
-            
-            // Для Telegram
+            const dataURL = canvas.toDataURL('image/png');
             tg.sendData(dataURL);
             tg.close();
         }
 
-        // Темная тема
         if (tg.colorScheme === 'dark') {
-            document.body.style.setProperty('--bg', '#0f172a');
-            document.body.style.setProperty('--text', '#f8fafc');
+            document.body.setAttribute('data-theme', 'dark');
         }
-
-        // Кнопка сохранения
-        tg.MainButton.setText("💾 Сохранить").onClick(saveMeme).show();
     </script>
 </body>
 </html>
