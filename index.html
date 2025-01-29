@@ -1,130 +1,171 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meme Generator Pro+</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.2.4/fabric.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js"></script>
     <style>
-        :root {
-            --bg: #ffffff;
-            --text: #1a1a1a;
-            --primary: #3b82f6;
-            --surface: #f1f5f9;
-        }
-
-        [data-theme="dark"] {
-            --bg: #0f172a;
-            --text: #f8fafc;
-            --surface: #1e293b;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
         }
 
         body {
-            font-family: Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 1rem;
+            background: #1e1e2e;
+            color: white;
             text-align: center;
         }
 
-        .container {
+        #canvas-container {
             display: flex;
-            flex-direction: column;
+            justify-content: center;
             align-items: center;
-            gap: 12px;
-        }
-
-        .canvas-container {
-            width: 100%;
-            max-width: 350px;
-            background: var(--surface);
-            border-radius: 12px;
-            padding: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            height: 60vh;
+            background: #28293d;
+            border-radius: 10px;
+            margin: 10px;
+            overflow: hidden;
         }
 
         canvas {
-            width: 100%;
-            height: auto;
-            display: block;
-            border-radius: 8px;
+            background: #fff;
+            border-radius: 10px;
+            max-width: 100%;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
         }
 
         button {
-            background: var(--primary);
+            background: #4CAF50;
             color: white;
             border: none;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 10px;
+            border-radius: 5px;
             cursor: pointer;
-            width: 90%;
             font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+        }
+
+        button:hover {
+            background: #45a049;
         }
 
         input {
             display: none;
         }
 
-        .hidden {
+        .sticker-container {
             display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #333;
+            padding: 10px;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .sticker {
+            width: 70px;
+            height: 70px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        .sticker:hover {
+            transform: scale(1.1);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="canvas-container">
-            <canvas id="canvas" width="300" height="300"></canvas>
-        </div>
 
-        <input type="file" id="uploadImage" accept="image/*">
-        <button onclick="document.getElementById('uploadImage').click()">📤 Загрузить изображение</button>
-        <button onclick="saveMeme()">💾 Сохранить в Telegram</button>
-        <button onclick="downloadMeme()">📩 Скачать</button>
+    <h2>Meme Generator Pro+</h2>
+
+    <div id="canvas-container">
+        <canvas id="memeCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <button onclick="document.getElementById('imageInput').click()">📷 Загрузить изображение</button>
+        <button onclick="addText()">📝 Добавить текст</button>
+        <button onclick="toggleStickers()">🎭 Добавить стикер</button>
+        <button onclick="saveMeme()">💾 Скачать мем</button>
+    </div>
+
+    <input type="file" id="imageInput" accept="image/*">
+
+    <div class="sticker-container" id="stickerContainer">
+        <img src="https://i.imgur.com/MXtmVsU.png" class="sticker" onclick="addSticker(this.src)">
+        <img src="https://i.imgur.com/7b9wLcn.png" class="sticker" onclick="addSticker(this.src)">
+        <img src="https://i.imgur.com/zJ2WWGV.png" class="sticker" onclick="addSticker(this.src)">
+        <img src="https://i.imgur.com/Ezyb2qG.png" class="sticker" onclick="addSticker(this.src)">
     </div>
 
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+        const canvas = new fabric.Canvas('memeCanvas', {
+            width: 300,
+            height: 300
+        });
 
-        // Инициализация Canvas
-        let canvas = new fabric.Canvas('canvas');
-
-        // Функция загрузки изображения
-        document.getElementById('uploadImage').addEventListener('change', function(event) {
+        // Загрузка изображения
+        document.getElementById('imageInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 fabric.Image.fromURL(e.target.result, function(img) {
-                    img.scaleToWidth(canvas.width);
+                    img.scaleToWidth(300);
                     canvas.clear();
                     canvas.add(img);
-                    canvas.renderAll();
+                    canvas.sendToBack(img);
                 });
             };
             reader.readAsDataURL(file);
         });
 
-        // Сохранение изображения
-        function saveMeme() {
-            const dataURL = canvas.toDataURL({
-                format: 'png',
-                quality: 0.9
+        // Добавление текста
+        function addText() {
+            const text = new fabric.IText('Твой текст', {
+                left: 50,
+                top: 50,
+                fontSize: 24,
+                fill: '#ffffff',
+                fontFamily: 'Arial',
+                fontWeight: 'bold',
+                editable: true,
+                textAlign: 'center'
             });
-            tg.sendData(dataURL);
-            tg.close();
+            canvas.add(text);
+            canvas.setActiveObject(text);
         }
 
-        // Скачивание изображения
-        function downloadMeme() {
-            const dataURL = canvas.toDataURL('image/png');
+        // Добавление стикеров
+        function addSticker(url) {
+            fabric.Image.fromURL(url, function(img) {
+                img.scaleToWidth(100);
+                img.scaleToHeight(100);
+                img.set({ left: 100, top: 100 });
+                canvas.add(img);
+            });
+        }
+
+        function toggleStickers() {
+            const stickerContainer = document.getElementById('stickerContainer');
+            stickerContainer.style.display = (stickerContainer.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        // Сохранение мема
+        function saveMeme() {
+            const dataURL = canvas.toDataURL({ format: 'png' });
             const link = document.createElement('a');
             link.href = dataURL;
             link.download = 'meme.png';
@@ -133,10 +174,12 @@
             document.body.removeChild(link);
         }
 
-        // Темная тема
-        if (tg.colorScheme === 'dark') {
-            document.documentElement.setAttribute("data-theme", "dark");
+        // Telegram WebApp адаптация
+        if (window.Telegram && Telegram.WebApp) {
+            Telegram.WebApp.expand();
+            Telegram.WebApp.MainButton.setText('Сохранить мем').show().onClick(saveMeme);
         }
     </script>
+
 </body>
 </html>
