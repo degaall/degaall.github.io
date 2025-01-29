@@ -8,17 +8,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js"></script>
     <style>
         :root {
-            --bg: #f8fafc;
+            --bg: #f9fafb;
             --text: #1a1a1a;
             --primary: #3b82f6;
-            --surface: #ffffff;
+            --surface: rgba(255, 255, 255, 0.9);
             --shadow: rgba(0, 0, 0, 0.1);
         }
 
         [data-theme="dark"] {
-            --bg: #0f172a;
+            --bg: #121826;
             --text: #f8fafc;
-            --surface: #1e293b;
+            --surface: rgba(30, 41, 59, 0.9);
             --shadow: rgba(255, 255, 255, 0.1);
         }
 
@@ -26,10 +26,11 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            transition: all 0.3s ease-in-out;
         }
 
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
             background: var(--bg);
             color: var(--text);
             padding: 1rem;
@@ -52,20 +53,15 @@
             padding: 10px;
             border-radius: 12px;
             box-shadow: 0 4px 10px var(--shadow);
+            width: 100%;
             display: flex;
             justify-content: center;
-            width: 100%;
+            overflow: hidden;
         }
 
         canvas {
             border-radius: 10px;
-        }
-
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 10px;
+            background: white;
         }
 
         .panel {
@@ -76,8 +72,8 @@
             margin-top: 12px;
             width: 100%;
             max-width: 500px;
-            display: flex;
             overflow-x: auto;
+            display: flex;
             gap: 8px;
             padding-bottom: 10px;
         }
@@ -93,6 +89,7 @@
             border-radius: 8px;
             cursor: pointer;
             transition: transform 0.2s;
+            box-shadow: 0 2px 5px var(--shadow);
         }
 
         .template-thumbnail {
@@ -112,17 +109,16 @@
             align-items: center;
             justify-content: center;
             background: var(--surface);
-            box-shadow: 0 2px 5px var(--shadow);
         }
 
         .save-button {
             background: var(--primary);
             color: white;
             border: none;
-            padding: 12px;
-            border-radius: 6px;
+            padding: 14px;
+            border-radius: 8px;
             margin-top: 12px;
-            font-size: 16px;
+            font-size: 18px;
             cursor: pointer;
             width: 100%;
             max-width: 500px;
