@@ -64,53 +64,6 @@
             background: white;
         }
 
-        .panel {
-            background: var(--surface);
-            padding: 12px;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px var(--shadow);
-            margin-top: 12px;
-            width: 100%;
-            max-width: 500px;
-            overflow-x: auto;
-            display: flex;
-            gap: 8px;
-            padding-bottom: 10px;
-        }
-
-        .panel h3 {
-            width: 100%;
-            text-align: center;
-            margin-bottom: 8px;
-        }
-
-        .template-thumbnail,
-        .sticker-item {
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.2s;
-            box-shadow: 0 2px 5px var(--shadow);
-        }
-
-        .template-thumbnail {
-            width: 80px;
-        }
-
-        .template-thumbnail:hover,
-        .sticker-item:hover {
-            transform: scale(1.05);
-        }
-
-        .sticker-item {
-            font-size: 36px;
-            width: 50px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--surface);
-        }
-
         .button {
             background: var(--primary);
             color: white;
@@ -142,16 +95,6 @@
             <canvas id="canvas"></canvas>
         </div>
 
-        <div class="panel">
-            <h3>🎭 Шаблоны</h3>
-            <div id="templates" style="display: flex; gap: 10px;"></div>
-        </div>
-
-        <div class="panel">
-            <h3>🌟 Стикеры</h3>
-            <div id="stickers" style="display: flex; gap: 10px;"></div>
-        </div>
-
         <label class="button">
             📤 Загрузить изображение
             <input type="file" id="uploadImage" accept="image/*">
@@ -168,79 +111,37 @@
             backgroundColor: '#fff'
         });
 
-        const templates = [
-            { name: 'Драматург', url: 'https://i.imgur.com/abc123.jpg', textAreas: [{ top: 50, left: 50, fontSize: 30 }] },
-            { name: 'Стивен Сигал', url: 'https://i.imgur.com/def456.jpg', textAreas: [{ top: 20, left: 50, fontSize: 25 }] }
-        ];
+        tg.expand(); // Разворачиваем WebApp
 
-        const stickers = ['😎', '🤣', '💥', '👑', '🔥', '💀', '❤️', '🎉'];
-
-        tg.expand();
-        initTemplates();
-        initStickers();
-
-        function initTemplates() {
-            const container = document.getElementById('templates');
-            templates.forEach(template => {
-                const img = document.createElement('img');
-                img.className = 'template-thumbnail';
-                img.src = template.url;
-                img.onclick = () => loadTemplate(template);
-                container.appendChild(img);
-            });
-        }
-
-        function initStickers() {
-            const container = document.getElementById('stickers');
-            stickers.forEach(sticker => {
-                const div = document.createElement('div');
-                div.className = 'sticker-item';
-                div.innerHTML = sticker;
-                div.onclick = () => addSticker(sticker);
-                container.appendChild(div);
-            });
-        }
-
-        function loadTemplate(template) {
-            fabric.Image.fromURL(template.url, img => {
-                canvas.setBackgroundImage(img, () => {
-                    canvas.renderAll();
-                    template.textAreas.forEach(area => {
-                        const text = new fabric.Textbox('Ваш текст', {
-                            ...area,
-                            width: 300,
-                            fill: '#ffffff',
-                            fontFamily: 'Impact',
-                            stroke: '#000000',
-                            strokeWidth: 2,
-                            textAlign: 'center'
+        // Загрузка изображения
+        document.getElementById('uploadImage').addEventListener('change', event => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    fabric.Image.fromURL(e.target.result, img => {
+                        const scaleX = canvas.width / img.width;
+                        const scaleY = canvas.height / img.height;
+                        img.scaleX = scaleX;
+                        img.scaleY = scaleY;
+                        
+                        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+                            scaleX: scaleX,
+                            scaleY: scaleY
                         });
-                        canvas.add(text);
                     });
-                }, {
-                    scaleX: canvas.width / img.width,
-                    scaleY: canvas.height / img.height
-                });
-            });
-        }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
 
-        function addSticker(sticker) {
-            const text = new fabric.Text(sticker, {
-                left: 100,
-                top: 100,
-                fontSize: 50,
-                fill: '#ffd700',
-                fontFamily: 'Arial',
-                shadow: 'black 2px 2px 4px'
-            });
-            canvas.add(text);
-        }
-
+        // Функция сохранения мема в Telegram
         function saveMeme() {
             tg.sendData(canvas.toDataURL('image/png'));
             tg.close();
         }
 
+        // Функция скачивания мема
         function downloadMeme() {
             const link = document.createElement('a');
             link.href = canvas.toDataURL('image/png');
@@ -248,18 +149,10 @@
             link.click();
         }
 
-        document.getElementById('uploadImage').addEventListener('change', event => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = e => fabric.Image.fromURL(e.target.result, img => {
-                    canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
-                });
-                reader.readAsDataURL(file);
-            }
-        });
-
-        if (tg.colorScheme === 'dark') document.body.setAttribute('data-theme', 'dark');
+        // Автоустановка тёмной темы в Telegram
+        if (tg.colorScheme === 'dark') {
+            document.body.setAttribute('data-theme', 'dark');
+        }
     </script>
 </body>
 </html>
